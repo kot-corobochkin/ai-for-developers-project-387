@@ -76,11 +76,20 @@ jobs:
           use_github_token: true
           prompt: |
             Review the Lighthouse JSON report at lighthouse-report/lighthouse.json.
-            Write a concise Russian report to lighthouse-report/lighthouse-review.md.
+            Write a concise Russian report to /tmp/lighthouse-review.md.
             Include the scores for performance, accessibility, best practices, and SEO;
             list failed audits and concrete recommended fixes, ordered by priority.
             Do not edit application source files, do not commit, do not push, and do not
             create a pull request. This is a scheduled read-only audit.
+
+      - name: Collect OpenCode recommendations
+        if: always()
+        run: |
+          if [ -f /tmp/lighthouse-review.md ]; then
+            cp /tmp/lighthouse-review.md lighthouse-report/lighthouse-review.md
+          else
+            printf '%s\n' 'OpenCode did not produce a review.' > lighthouse-report/lighthouse-review.md
+          fi
 
       - name: Upload Lighthouse report and OpenCode recommendations
         if: always()
