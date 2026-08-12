@@ -34,6 +34,16 @@ export function nowInOwnerZone(): DateTime {
   return DateTime.now().setZone(TIMEZONE);
 }
 
+export function isSlotBoundary(value: DateTime, durationMinutes: number): boolean {
+  const minuteOfDay = value.hour * 60 + value.minute;
+  return (
+    value.weekday <= 5 &&
+    minuteOfDay >= WORK_START * 60 &&
+    minuteOfDay + durationMinutes <= WORK_END * 60 &&
+    (minuteOfDay - WORK_START * 60) % durationMinutes === 0
+  );
+}
+
 export function parseInstant(value: unknown): DateTime | null {
   if (typeof value !== "string" || !value.trim()) return null;
   const parsed = DateTime.fromISO(value, { setZone: true });
