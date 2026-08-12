@@ -66,6 +66,20 @@ test("rejects an unavailable slot and prevents closing booked time", async () =>
   await app.close();
 });
 
+test("books every generated slot for a duration that does not divide 60", async () => {
+  const app = await appWithStore();
+  const event = JSON.parse((await app.inject({ method: "POST", url: "/api/admin/event-types", payload: { title: "Глубокая консультация", durationMinutes: 45 } })).body) as { id: string };
+  const date = new Date().toISOString().slice(0, 10);
+  const endDate = new Date(Date.now() + 13 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const slots = JSON.parse((await app.inject({ method: "GET", url: `/api/public/event-types/${event.id}/slots?from=${date}&to=${endDate}` })).body) as { startsAt: string }[];
+  assert.ok(slots.length > 0);
+  for (const slot of slots.slice(0, 5)) {
+    const response = await app.inject({ method: "POST", url: "/api/public/bookings", payload: { eventTypeId: event.id, startsAt: slot.startsAt, guestName: "Иван Иванов", guestEmail: "ivan@example.com" } });
+    assert.equal(response.statusCode, 201, `slot ${slot.startsAt} should be bookable`);
+  }
+  await app.close();
+});
+
 test("does not allow an availability exception over a booking", async () => {
   const app = await appWithStore();
   const event = JSON.parse((await app.inject({ method: "GET", url: "/api/public/event-types" })).body)[0] as { id: string };

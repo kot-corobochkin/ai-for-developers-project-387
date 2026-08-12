@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { addDays, format, parseISO } from "date-fns";
 import { CalendarDays, ChevronRight, Clock3, Mail, MapPin, Plus, Settings2, Trash2, UserRound } from "lucide-react";
-import { api, getApiError } from "./api/client";
+import { api, ApiRequestError, getApiError } from "./api/client";
 import type { BookingStatus, CreateAvailabilityExceptionRequest, EventType } from "./api/types";
 import { Badge, Button, Card, EmptyState, Input, Spinner } from "./components/ui";
 import { dateInputValue, formatDate, formatDateTime, isPastDate, nextDaysRange, toRfc3339 } from "./utils";
@@ -31,7 +31,7 @@ function PublicPage() {
   const [confirmed, setConfirmed] = useState<{ title: string; startsAt: string; endsAt: string } | null>(null);
   const range = useMemo(nextDaysRange, []);
   const slots = useQuery({ queryKey: ["slots", selected?.id, date], queryFn: () => api.public.slots(selected!.id, date, date), enabled: Boolean(selected) });
-  const createBooking = useMutation({ mutationFn: api.public.createBooking, onSuccess: (result) => { client.invalidateQueries({ queryKey: ["slots"] }); setConfirmed({ title: result.eventTypeTitle, startsAt: result.startsAt, endsAt: result.endsAt }); setSlot(null); } });
+  const createBooking = useMutation({ mutationFn: api.public.createBooking, onSuccess: (result) => { client.invalidateQueries({ queryKey: ["slots"] }); setConfirmed({ title: result.eventTypeTitle, startsAt: result.startsAt, endsAt: result.endsAt }); setSlot(null); }, onError: (error) => { const code = error instanceof ApiRequestError ? error.payload?.code : undefined; if (code === "BOOKING_CONFLICT" || code === "SLOT_UNAVAILABLE") { client.invalidateQueries({ queryKey: ["slots"] }); setSlot(null); } } });
   const days = Array.from({ length: 14 }, (_, index) => addDays(parseISO(`${range.from}T12:00:00`), index));
 
   if (owner.isLoading || eventTypes.isLoading) return <Loading />;

@@ -1,7 +1,7 @@
 import Fastify, { type FastifyInstance, type FastifyReply } from "fastify";
 import cors from "@fastify/cors";
 import { DateTime } from "luxon";
-import { CalendarStore, WORK_END, WORK_START, dateRangeWithinWindow, iso, nowInOwnerZone, overlaps, parseDate, parseInstant, withinBookingWindow, windowBounds } from "./store.js";
+import { CalendarStore, WORK_END, WORK_START, dateRangeWithinWindow, isSlotBoundary, iso, nowInOwnerZone, overlaps, parseDate, parseInstant, withinBookingWindow, windowBounds } from "./store.js";
 import type { ApiError, AvailabilityException, Booking, CreateAvailabilityExceptionRequest, CreateBookingRequest, CreateEventTypeRequest, EventType, UpdateEventTypeRequest } from "./types.js";
 
 export function createApp(store = new CalendarStore()): FastifyInstance {
@@ -39,6 +39,7 @@ export function createApp(store = new CalendarStore()): FastifyInstance {
       if (day.weekday > 5) continue;
       for (let minute = WORK_START * 60; minute + event.durationMinutes <= WORK_END * 60; minute += event.durationMinutes) {
         const start = day.startOf("day").plus({ minutes: minute });
+        if (!isSlotBoundary(start, event.durationMinutes)) continue;
         const end = start.plus({ minutes: event.durationMinutes });
         if (start <= nowInOwnerZone()) continue;
         const unavailable = store.exceptions.some((item) => overlaps(start.toUTC(), end.toUTC(), parseInstant(item.startsAt)!, parseInstant(item.endsAt)!));
@@ -59,7 +60,7 @@ export function createApp(store = new CalendarStore()): FastifyInstance {
     const start = parseInstant(input.startsAt)!; const end = start.plus({ minutes: event.durationMinutes });
     if (!withinBookingWindow(start.setZone(store.owner.timezone), end.setZone(store.owner.timezone))) return fail(reply, 422, "SLOT_OUTSIDE_BOOKING_WINDOW", "Дата находится за пределами окна бронирования.");
     const localStart = start.setZone(store.owner.timezone);
-    const validWorkingSlot = localStart.weekday <= 5 && localStart.minute % event.durationMinutes === 0 && localStart.hour >= WORK_START && (localStart.hour * 60 + localStart.minute + event.durationMinutes) <= WORK_END * 60;
+    const validWorkingSlot = isSlotBoundary(localStart, event.durationMinutes) && localStart > nowInOwnerZone();
     if (!validWorkingSlot) return fail(reply, 409, "SLOT_UNAVAILABLE", "Выбранное время недоступно.");
     if (store.bookings.some((item) => item.status === "confirmed" && overlaps(start, end, parseInstant(item.startsAt)!, parseInstant(item.endsAt)!))) return fail(reply, 409, "BOOKING_CONFLICT", "Это время уже заняли.");
     if (store.exceptions.some((item) => overlaps(start, end, parseInstant(item.startsAt)!, parseInstant(item.endsAt)!))) return fail(reply, 409, "SLOT_UNAVAILABLE", "Выбранное время недоступно.");
