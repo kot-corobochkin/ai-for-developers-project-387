@@ -1,0 +1,92 @@
+name: OpenCode Lighthouse review
+
+on:
+  schedule:
+    # 05:00 Moscow time (UTC+3).
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  lighthouse-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Build frontend
+        run: npm run build
+        working-directory: frontend
+        env:
+          VITE_API_BASE_URL: https://calendar-service-api.onrender.com/api
+
+      - name: Start frontend preview
+        run: |
+          npx --yes vite preview --host 127.0.0.1 --port 4173 > /tmp/vite-preview.log 2>&1 &
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:4173/ >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/vite-preview.log
+          exit 1
+        working-directory: frontend
+
+      - name: Install Lighthouse CLI
+        run: npm install --global lighthouse
+
+      - name: Generate Lighthouse reports
+        run: |
+          mkdir -p lighthouse-report
+          lighthouse http://127.0.0.1:4173 \
+            --output=json \
+            --output-path=./lighthouse-report/lighthouse.json \
+            --chrome-flags="--headless --no-sandbox"
+          lighthouse http://127.0.0.1:4173 \
+            --output=html \
+            --output-path=./lighthouse-report/lighthouse.html \
+            --chrome-flags="--headless --no-sandbox"
+
+      - name: Ask OpenCode to review Lighthouse results
+        uses: anomalyco/opencode/github@latest
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          model: opencode/big-pickle
+          use_github_token: true
+          prompt: |
+            Review the Lighthouse JSON report at lighthouse-report/lighthouse.json.
+            Write a concise Russian report to lighthouse-report/lighthouse-review.md.
+            Include the scores for performance, accessibility, best practices, and SEO;
+            list failed audits and concrete recommended fixes, ordered by priority.
+            Do not edit application source files, do not commit, do not push, and do not
+            create a pull request. This is a scheduled read-only audit.
+
+      - name: Upload Lighthouse report and OpenCode recommendations
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: opencode-lighthouse-report
+          path: lighthouse-report/
+          if-no-files-found: warn
+          retention-days: 30
