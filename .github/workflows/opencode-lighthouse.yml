@@ -56,14 +56,14 @@ jobs:
 
       - name: Generate Lighthouse reports
         run: |
-          mkdir -p /tmp/lighthouse-report
+          mkdir -p lighthouse-report
           lighthouse http://127.0.0.1:4173 \
             --output=json \
-            --output-path=/tmp/lighthouse-report/lighthouse.json \
+            --output-path=./lighthouse-report/lighthouse.json \
             --chrome-flags="--headless --no-sandbox"
           lighthouse http://127.0.0.1:4173 \
             --output=html \
-            --output-path=/tmp/lighthouse-report/lighthouse.html \
+            --output-path=./lighthouse-report/lighthouse.html \
             --chrome-flags="--headless --no-sandbox"
 
       - name: Ask OpenCode to review Lighthouse results
@@ -75,8 +75,8 @@ jobs:
           model: opencode/big-pickle
           use_github_token: true
           prompt: |
-            Review the Lighthouse JSON report at /tmp/lighthouse-report/lighthouse.json.
-            Write a concise Russian report to /tmp/lighthouse-review.md.
+            Review the Lighthouse JSON report at lighthouse-report/lighthouse.json.
+            Write a concise Russian report to lighthouse-report/lighthouse-review.md.
             Include the scores for performance, accessibility, best practices, and SEO;
             list failed audits and concrete recommended fixes, ordered by priority.
             Do not edit application source files, do not commit, do not push, and do not
@@ -86,10 +86,7 @@ jobs:
         if: always()
         run: |
           mkdir -p lighthouse-report
-          cp /tmp/lighthouse-report/* lighthouse-report/ 2>/dev/null || true
-          if [ -f /tmp/lighthouse-review.md ]; then
-            cp /tmp/lighthouse-review.md lighthouse-report/lighthouse-review.md
-          else
+          if [ ! -f lighthouse-report/lighthouse-review.md ]; then
             printf '%s\n' 'OpenCode did not produce a review.' > lighthouse-report/lighthouse-review.md
           fi
 
