@@ -1,4 +1,19 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+
+// The backend only generates slots for weekdays (Mon–Fri) and only for times
+// still in the future, so a fixed day index breaks near weekends or late in
+// the evening. Walk the calendar until a day actually offering slots is found.
+async function selectDayWithSlots(page: Page) {
+  const days = page.locator("button.day:not(:disabled)");
+  const total = await days.count();
+  for (let index = 0; index < total; index += 1) {
+    await days.nth(index).click();
+    await page.locator(".slots-heading ~ .empty-state, .slots-grid .slot").first().waitFor();
+    const slot = page.locator(".slot").first();
+    if (await slot.isVisible()) return slot;
+  }
+  throw new Error("В окне бронирования не нашлось дня со свободными слотами");
+}
 
 test.describe("публичное бронирование", () => {
   test("гость выбирает встречу, бронирует слот и видит её в админке", async ({ page }) => {
@@ -9,9 +24,7 @@ test.describe("публичное бронирование", () => {
     await page.getByRole("button", { name: /Короткая встреча/ }).click();
 
     await expect(page.getByRole("heading", { name: "Короткая встреча" })).toBeVisible();
-    await page.locator("button.day:not(:disabled)").nth(1).click();
-    const slot = page.locator(".slot").first();
-    await expect(slot).toBeVisible();
+    const slot = await selectDayWithSlots(page);
     const slotLabel = await slot.innerText();
     await slot.click();
 
@@ -32,9 +45,7 @@ test.describe("публичное бронирование", () => {
   test("после бронирования слот исчезает из доступных", async ({ page }) => {
     await page.goto("/");
     await page.getByRole("button", { name: /Короткая встреча/ }).click();
-    await page.locator("button.day:not(:disabled)").nth(1).click();
-    const slot = page.locator(".slot").first();
-    await expect(slot).toBeVisible();
+    const slot = await selectDayWithSlots(page);
     const bookedSlotLabel = await slot.innerText();
     await slot.click();
     await page.getByLabel("Имя и фамилия").fill("First Guest");
