@@ -4,10 +4,15 @@ on:
   issues:
     types: [opened]
 
+concurrency:
+  group: opencode-triage-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
 jobs:
   triage:
-    if: github.event.issue.user.login == 'kot-corobochkin'
+    if: github.event.issue.user.login == 'kot-corobochkin' && github.event.issue.user.type != 'Bot'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       issues: write
     steps:
