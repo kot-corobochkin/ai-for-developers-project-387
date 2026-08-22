@@ -3,6 +3,10 @@
 Calendar Service состоит из React-клиента, TypeSpec/OpenAPI-контракта и
 in-memory backend на Fastify.
 
+## Требования
+
+- Node.js 20+ и npm (в CI используется Node.js 22)
+
 ## Запуск backend
 
 ```bash
